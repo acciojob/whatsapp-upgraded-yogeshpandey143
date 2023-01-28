@@ -33,6 +33,12 @@ public class Message {
 		this.content = content;
 		this.timestamp = timestamp;
 	}
+	public Message(int id, String content) {
+		super();
+		this.id = id;
+		this.content = content;
+		
+	}
 	public Message() {
 		super();
 		// TODO Auto-generated constructor stub
