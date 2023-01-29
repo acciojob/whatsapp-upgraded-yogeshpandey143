@@ -38,183 +38,128 @@ public class WhatsappRepository {
     }
     
     
-    
-    public String createUser(String name ,String mobile)throws Exception
-    {
-      User user = new User();
-
-      if(userMobile.contains(mobile))
-      {
-    	  throw new Exception("User already exists");  
-      }
-      else {
-    	   user.setName(name);
-    	   user.setMobile(mobile);  
-    	   userMobile.add(mobile);
-    	   }
-    	return "SUCCESS";
+    public String createUser(String name, String mobileNumber) throws Exception {
+        if (userMobile.contains(mobileNumber)) throw new Exception("User already exists");
+        else {
+            User user = new User(name, mobileNumber);
+            userMobile.add(mobileNumber);
+        }
+        return "SUCCESS";
     }
-    
-    
-    public Group createGroup(List<User> users){
-        // The list contains at least 2 users where the first user is the admin. A group has exactly one admin.
-        // If there are only 2 users, the group is a personal chat and the group name should be kept as the name of the second user(other than admin)
-        // If there are 2+ users, the name of group should be "Group count". For example, the name of first group would be "Group 1", second would be "Group 2" and so on.
-        // Note that a personal chat is not considered a group and the count is not updated for personal chats.
-        // If group is successfully created, return group.
 
-        //For example: Consider userList1 = {Alex, Bob, Charlie}, userList2 = {Dan, Evan}, userList3 = {Felix, Graham, Hugh}.
-        //If createGroup is called for these userLists in the same order, their group names would be "Group 1", "Evan", and "Group 2" respectively.
+    public Group createGroup(List<User> userList) {
+        if (userList.size() == 2) {
+            Group group = new Group(userList.get(1).getName(), 2);
+            adminMap.put(group, userList.get(0));
+            groupUserMap.put(group, userList);
+            groupMessageMap.put(group, new ArrayList<Message>());
+            return group;
+        }
+        this.customGroupCount += 1;
+        Group group = new Group(new String("Group " + this.customGroupCount), userList.size());
+        adminMap.put(group, userList.get(0));
+        groupUserMap.put(group, userList);
+        groupMessageMap.put(group, new ArrayList<Message>());
+        return group;
+    }
 
-    	Group group=new Group();
-    	
-    	if(users.size()==2)
-    	{
-    		String name =users.get(1).getName();
-    		group.setName(name);
-    		group.setNumberOfParticipants(users.size());
-    		 
-    		
-    	 groupUserMap.put(group, users);
-    	 customGroupCount +=1;
-    	 
-    	}
-    	else if(users.size()>2)
-    	{
-    	  String name =	"Group "+ customGroupCount;
-    		group.setName(name);
-    		group.setNumberOfParticipants(users.size());
-    	  groupUserMap.put(group, users);
-     	 customGroupCount +=1;
-    	}
-    	
-    	return group;
+    public int createMessage(String messageContent) {
+        messageId += 1;
+        Message message = new Message(messageId, messageContent);
+        return messageId;
     }
-    
-    public int createMessage(String content){
-        // The 'i^th' created message has message id 'i'.
-        // Return the message id.
-    	
-    	return messageId;
-    	
-    	
-    }
-    
-    public int sendMessage(Message message, User sender, Group group) throws Exception{
-        //Throw "Group does not exist" if the mentioned group does not exist
-    	 
-    	if(!groupUserMap.containsKey(group))
-    	{
-    		throw new Exception("Group does not exist");
-    		
-    	}
-    	
-    	
-    	List<Message> messageList = new ArrayList();
-    	 if(groupUserMap.containsKey(group))
-    	{
-    	   List<User> userList = groupUserMap.get(group);
-    	   if(! userList.contains(sender))
-    	   {
-    		  throw new Exception("You are not allowed to send message") ;
-    	   }
-    	   else {
-    		   
-    		 messageList =  groupMessageMap.get(group);
-    		   groupMessageMap.put(group, messageList);
-    		   
-    	   }
-    	  
-    	}
 
-    	 return  messageList.size();
+    public int sendMessage(Message messageContent, User sender, Group group) throws Exception {
+        if (adminMap.containsKey(group)) {
+            List<User> users = groupUserMap.get(group);
+            Boolean isUserPresent = false;
+            for (User user : users) {
+                if (user.equals(sender)) {
+                    isUserPresent = true;
+                    break;
+                }
+            }
+            if (isUserPresent) {
+                senderMap.put(messageContent, sender);
+                List<Message> messages = groupMessageMap.get(group);
+                messages.add(messageContent);
+                groupMessageMap.put(group, messages);
+                return messages.size();
+            }
+            throw new Exception("You are not allowed to send message");
+        }
+        throw new Exception("Group does not exist");
     }
-    
-    
+
     public String changeAdmin(User approver, User user, Group group) throws Exception {
         if (!adminMap.containsKey(group)) throw new Exception("Group does not exist");
         if (!adminMap.get(group).equals(approver)) throw new Exception("Approver does not have rights");
         List<User> participants = groupUserMap.get(group);
-        Boolean userFound = false;
+        Boolean isUserPresent = false;
         for (User participant : participants) {
             if (participant.equals(user)) {
-                userFound = true;
+                isUserPresent = true;
                 break;
             }
         }
-        if (userFound) {
-            adminMap.put(group, user);
-            return "SUCCESS";
-        }
-        throw new Exception("User is not a participant");
+        if (!isUserPresent) throw new Exception("User is not a participant");
+        adminMap.put(group, user);
+        return "SUCCESS";
 
     }
-    
-    
+
     public int removeUser(User user) throws Exception {
-        Boolean userFound = false;
-        Group userGroup = null;
+        Boolean isUserPresent = false;
+        Group usersGroup = null;
         for (Group group : groupUserMap.keySet()) {
             List<User> participants = groupUserMap.get(group);
             for (User participant : participants) {
                 if (participant.equals(user)) {
-                    if (adminMap.get(group).equals(user)) {
-                        throw new Exception("Cannot remove admin");
-                    }
-                    userGroup = group;
-                    userFound = true;
+                    if (adminMap.get(group).equals(user)) throw new Exception("Cannot remove admin");
+                    usersGroup = group;
+                    isUserPresent = true;
                     break;
                 }
             }
-            if (userFound) {
+            if (isUserPresent) {
                 break;
             }
         }
-        if (userFound) {
-            List<User> users = groupUserMap.get(userGroup);
-            List<User> updatedUsers = new ArrayList<>();
+        if (isUserPresent) {
+            List<User> users = groupUserMap.get(usersGroup);
+            List<User> newUserList = new ArrayList<>();
             for (User participant : users) {
                 if (participant.equals(user))
                     continue;
-                updatedUsers.add(participant);
+                newUserList.add(participant);
             }
-            groupUserMap.put(userGroup, updatedUsers);
+            groupUserMap.put(usersGroup, newUserList);
 
-            List<Message> messages = groupMessageMap.get(userGroup);
+            List<Message> messages = groupMessageMap.get(usersGroup);
             List<Message> updatedMessages = new ArrayList<>();
             for (Message message : messages) {
-                if (senderMap.get(message).equals(user))
-                    continue;
-                updatedMessages.add(message);
+                if (!senderMap.get(message).equals(user)) updatedMessages.add(message);
             }
-            groupMessageMap.put(userGroup, updatedMessages);
+            groupMessageMap.put(usersGroup, updatedMessages);
 
             HashMap<Message, User> updatedSenderMap = new HashMap<>();
             for (Message message : senderMap.keySet()) {
-                if (senderMap.get(message).equals(user))
-                    continue;
-                updatedSenderMap.put(message, senderMap.get(message));
+                if (!senderMap.get(message).equals(user)) updatedSenderMap.put(message, senderMap.get(message));
             }
             senderMap = updatedSenderMap;
-            return updatedUsers.size() + updatedMessages.size() + updatedSenderMap.size();
+            return newUserList.size() + updatedMessages.size() + updatedSenderMap.size();
         }
         throw new Exception("User not found");
     }
 
     public String findMessage(Date start, Date end, int K) throws Exception {
         List<Message> messages = new ArrayList<>();
-        for (Group group : groupMessageMap.keySet()) {
-            messages.addAll(groupMessageMap.get(group));
-        }
+        for (Group group : groupMessageMap.keySet()) messages.addAll(groupMessageMap.get(group));
         List<Message> filteredMessages = new ArrayList<>();
         for (Message message : messages) {
-            if (message.getTimestamp().after(start) && message.getTimestamp().before(end)) {
-                filteredMessages.add(message);
-            }
+            if (message.getTimestamp().after(start) && message.getTimestamp().before(end)) filteredMessages.add(message);
         }
-        if (filteredMessages.size() < K) {
-            throw new Exception("K is greater than the number of messages");
-        }
+        if (filteredMessages.size() < K) throw new Exception("K is greater than the number of messages");
         Collections.sort(filteredMessages, new Comparator<Message>() {
             public int compare(Message m1, Message m2) {
                 return m2.getTimestamp().compareTo(m1.getTimestamp());
@@ -222,7 +167,4 @@ public class WhatsappRepository {
         });
         return filteredMessages.get(K - 1).getContent();
     }
-    
-    
-
 }
